@@ -29,7 +29,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           version=$(sed -n 's/.*android:versionName="\([^"]*\)".*/\1/p' AndroidManifest.xml)
-          [ "v$version" = "$GITHUB_REF_softbinder-module" ] || { echo "tag $GITHUB_REF_softbinder-module does not match versionName $version"; exit 1; }
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "expected tag v$version, got $GITHUB_REF_NAME"; exit 1; }
 
       - name: Build
         env:
@@ -42,7 +42,7 @@ jobs:
             export KEYSTORE="$RUNNER_TEMP/release.keystore"
           fi
           ./build.sh
-          cp softbinder-module.apk "softbinder-module-${GITHUB_REF_softbinder-module}.apk"
+          cp softbinder-module.apk "softbinder-module-${GITHUB_REF_NAME}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -53,4 +53,4 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_softbinder-module" "softbinder-module-${GITHUB_REF_softbinder-module}.apk" --title "$GITHUB_REF_softbinder-module" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" "softbinder-module-${GITHUB_REF_NAME}.apk" --title "$GITHUB_REF_NAME" --generate-notes
