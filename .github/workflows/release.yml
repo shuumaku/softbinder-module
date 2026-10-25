@@ -1,0 +1,56 @@
+# Builds the APK and, for a tag like v0.0.1, publishes it as a GitHub release.
+# The tag must match versionName in AndroidManifest.xml.
+# Secrets (optional; without them the APK is signed with a throwaway key and cannot update an earlier release):
+#   SIGNING_KEYSTORE  base64 of the keystore file
+#   SIGNING_PASSWORD  keystore and key password
+#   SIGNING_ALIAS     key alias
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Check tag against versionName
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(sed -n 's/.*android:versionName="\([^"]*\)".*/\1/p' AndroidManifest.xml)
+          [ "v$version" = "$GITHUB_REF_softbinder-module" ] || { echo "tag $GITHUB_REF_softbinder-module does not match versionName $version"; exit 1; }
+
+      - name: Build
+        env:
+          SIGNING_KEYSTORE: ${{ secrets.SIGNING_KEYSTORE }}
+          KEYSTORE_PASS: ${{ secrets.SIGNING_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_ALIAS }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE" ]; then
+            echo "$SIGNING_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            export KEYSTORE="$RUNNER_TEMP/release.keystore"
+          fi
+          ./build.sh
+          cp softbinder-module.apk "softbinder-module-${GITHUB_REF_softbinder-module}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: softbinder-module
+          path: softbinder-module.apk
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_softbinder-module" "softbinder-module-${GITHUB_REF_softbinder-module}.apk" --title "$GITHUB_REF_softbinder-module" --generate-notes

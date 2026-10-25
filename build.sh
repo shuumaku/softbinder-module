@@ -13,9 +13,9 @@ javac -source 8 -target 8 -Xlint:-options -cp "$JAR:$OUT/stubs" -d $OUT/classes 
 $BT/d8 --lib "$JAR" --min-api 29 --output $OUT $(find $OUT/classes -name '*.class')   # stubs are compile-only
 cp $OUT/base.apk $OUT/unsigned.apk && (cd $OUT && zip -q -j unsigned.apk classes.dex)
 
-KS=${KEYSTORE:-debug.keystore}
-[ -f "$KS" ] || keytool -genkeypair -keystore "$KS" -storepass android -keypass android -alias dbg \
+KS=${KEYSTORE:-debug.keystore}; export KEYSTORE_PASS=${KEYSTORE_PASS:-android}; KEY_ALIAS=${KEY_ALIAS:-dbg}
+[ -f "$KS" ] || keytool -genkeypair -keystore "$KS" -storepass "$KEYSTORE_PASS" -keypass "$KEYSTORE_PASS" -alias "$KEY_ALIAS" \
   -dname "CN=debug" -keyalg RSA -keysize 2048 -validity 10000 >/dev/null 2>&1
 $BT/zipalign -f 4 $OUT/unsigned.apk $OUT/aligned.apk
-$BT/apksigner sign --ks "$KS" --ks-pass pass:android --key-pass pass:android --out softbinder-module.apk $OUT/aligned.apk
+$BT/apksigner sign --ks "$KS" --ks-key-alias "$KEY_ALIAS" --ks-pass env:KEYSTORE_PASS --key-pass env:KEYSTORE_PASS --out softbinder-module.apk $OUT/aligned.apk
 echo softbinder-module.apk
