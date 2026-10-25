@@ -6,39 +6,79 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * /data/system/softbinder.json, re-read whenever it changes (watcher)
+ *
+ * A bind's optional "window" (base | dialog | ime | any, default base) and
+ * "activity" (suffix of the focused window's
+ * component, default any) say when it applies; the most specific bind for a key
+ * wins.
  */
 final class Config {
     static final String FILE = "/data/system/softbinder.json";
 
     static final class Bind {
-        final String label, action, param;
+        final int slot;
+        final String label, action, param, window, activity;
 
-        Bind(String label, String action, String param) {
+        Bind(int slot, String label, String action, String param, String window, String activity) {
+            this.slot = slot;
             this.label = label;
             this.action = action;
             this.param = param;
+            this.window = window;
+            this.activity = activity;
+        }
+
+        /** Higher wins when two binds fit the same key. */
+        int specificity() {
+            return (activity.isEmpty() ? 0 : 2) + (window.equals("any") ? 0 : 1);
         }
     }
 
-    private static volatile Map<String, Bind[]> binds = Collections.emptyMap();
+    private static final List<String> WINDOWS = Arrays.asList("base", "dialog", "ime", "any");
+
+    private static volatile Map<String, List<Bind>> binds = Collections.emptyMap();
     private static long seen = -1;
 
     private Config() {
     }
 
     /**
-     * @return the binds for a package indexed by slot (1..4, null = unbound), or
-     *         null if the package has none.
+     * @param window "base", "ime" (base window with a keyboard up) or "dialog"
+     * @param title  the focused window's title, normally "package/activity"
+     * @return the binds in force for a package indexed by slot (1..4, null =
+     *         unbound), or
+     *         null if none apply.
      */
-    static Bind[] forPackage(String pkg) {
+    static Bind[] resolve(String pkg, String window, CharSequence title) {
         reload();
-        return binds.get(pkg);
+        List<Bind> all = binds.get(pkg);
+        if (all == null)
+            return null;
+        Bind[] best = new Bind[5];
+        boolean any = false;
+        for (Bind b : all) {
+            if (!appliesTo(b, window, title))
+                continue;
+            if (best[b.slot] == null || b.specificity() >= best[b.slot].specificity())
+                best[b.slot] = b;
+            any = true;
+        }
+        return any ? best : null;
+    }
+
+    private static boolean appliesTo(Bind b, String window, CharSequence title) {
+        boolean windowOk = b.window.equals("any") || b.window.equals(window)
+                || (b.window.equals("base") && window.equals("ime"));
+        return windowOk && (b.activity.isEmpty() || (title != null && title.toString().endsWith(b.activity)));
     }
 
     static int slot(String key) {
@@ -54,7 +94,7 @@ final class Config {
             return;
         seen = now;
         Journal.debug = false;
-        Map<String, Bind[]> parsed = new HashMap<String, Bind[]>();
+        Map<String, List<Bind>> parsed = new HashMap<String, List<Bind>>();
         if (file.exists()) {
             try {
                 parse(read(file), parsed);
@@ -66,7 +106,7 @@ final class Config {
         Journal.d("config loaded: " + parsed.keySet());
     }
 
-    private static void parse(String text, Map<String, Bind[]> out) throws Exception {
+    private static void parse(String text, Map<String, List<Bind>> out) throws Exception {
         JSONObject root = new JSONObject(text);
         Journal.debug = root.optBoolean("debug");
         JSONArray list = root.optJSONArray("binds");
@@ -76,14 +116,16 @@ final class Config {
             JSONObject o = list.optJSONObject(i);
             String app = o == null ? "" : o.optString("app");
             int slot = o == null ? -1 : slot(o.optString("key"));
-            if (app.isEmpty() || slot < 1 || !Actions.valid(o.optString("action"))) {
+            String window = o == null ? "" : o.optString("window", "base");
+            if (app.isEmpty() || slot < 1 || !Actions.valid(o.optString("action")) || !WINDOWS.contains(window)) {
                 Journal.e("config: skipped entry " + i);
                 continue;
             }
-            Bind[] slots = out.get(app);
-            if (slots == null)
-                out.put(app, slots = new Bind[5]);
-            slots[slot] = new Bind(o.optString("label"), o.optString("action"), o.optString("param").trim());
+            List<Bind> forApp = out.get(app);
+            if (forApp == null)
+                out.put(app, forApp = new ArrayList<Bind>());
+            forApp.add(new Bind(slot, o.optString("label"), o.optString("action"), o.optString("param").trim(), window,
+                    o.optString("activity").trim()));
         }
     }
 

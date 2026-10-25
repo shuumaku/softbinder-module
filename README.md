@@ -24,6 +24,8 @@ Example of the configuration file:
 
 Actions: `launch`, `intent`, `broadcast`, `swipe`, `key`. `"debug": true` logs to `/data/system/softbinder.log`.
 
+A bind can be limited with `"window"` (`base` by default, `dialog`, `ime` for keyboard showing, or `any`) and `"activity"` (the end of the window's activity name). When several binds fit a key, the most specific one wins, so one key can change with the window.
+
 Build: `./build.sh`
 
 GPL-3.0, see LICENSE.

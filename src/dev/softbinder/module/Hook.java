@@ -27,6 +27,7 @@ public class Hook implements IXposedHookLoadPackage {
     private static final String KEY_ACTION = "com.kyocera.hardkey.KCfpSoftkeyAction";
     private static final String WINDOW_STATE = "com.android.server.policy.WindowManagerPolicy$WindowState";
     private static final int TYPE_BASE_APPLICATION = 1;
+    private static final int TYPE_APPLICATION_STARTING = 3;
 
     private static ClassLoader cl;
     private static volatile Config.Bind[] target; // binds of the focused app's base window; null = leave the bar alone
@@ -68,20 +69,24 @@ public class Hook implements IXposedHookLoadPackage {
 
     // displaySoftkeys(focusedApp, ime): the framework shows the IME window's
     // softkeys when a keyboard is up,
-    // but whether a bind applies depends on the focused app window.
+    // but which binds apply depends on the focused app window: its type, whether a
+    // keyboard is up, and its activity.
     private static void onDisplay(XC_MethodHook.MethodHookParam m) {
         Object focus = m.args[0];
         if (focus == null)
             return;
         Object shown = m.args[1] != null ? m.args[1] : focus;
         String pkg = String.valueOf(XposedHelpers.callMethod(focus, "getOwningPackage"));
-        int type = (Integer) XposedHelpers.getObjectField(XposedHelpers.callMethod(focus, "getAttrs"), "type");
+        Object attrs = XposedHelpers.callMethod(focus, "getAttrs");
+        int type = (Integer) XposedHelpers.getObjectField(attrs, "type");
+        CharSequence title = (CharSequence) XposedHelpers.callMethod(attrs, "getTitle");
         Object softkeys = XposedHelpers.getObjectField(XposedHelpers.callMethod(shown, "getAttrs"), "softkeys");
 
-        Config.Bind[] binds = type == TYPE_BASE_APPLICATION ? Config.forPackage(pkg) : null;
+        String window = windowContext(type, shown != focus);
+        Config.Bind[] binds = window == null ? null : Config.resolve(pkg, window, title);
         target = binds;
         if (Journal.debug) {
-            Journal.d("focus " + pkg + " type=" + type + (shown != focus ? " +ime" : "") + " bound=" + (binds != null)
+            Journal.d("focus " + pkg + " " + title + " type=" + type + " window=" + window + " bound=" + (binds != null)
                     + " " + dump(softkeys));
         }
 
@@ -89,12 +94,31 @@ public class Hook implements IXposedHookLoadPackage {
         // The service only re-sends softkeys when they differ from the last ones sent;
         // a window that leaves every slot
         // unclaimed looks identical to the previous one, so clear the cache whenever
-        // our view of the bar changes.
-        String key = binds != null ? pkg + "|" + dump(softkeys) : "";
+        // what we would show changes.
+        String key = binds == null ? "" : pkg + "|" + window + "|" + labels(binds) + "|" + dump(softkeys);
         if (!key.equals(forced)) {
             forced = key;
             XposedHelpers.setObjectField(m.thisObject, "mLastSoftkeys", null);
         }
+    }
+
+    /**
+     * @return "base", "ime" (base window with a keyboard up) or "dialog"; null for
+     *         windows binds never apply to.
+     */
+    private static String windowContext(int type, boolean imeShown) {
+        if (type == TYPE_BASE_APPLICATION)
+            return imeShown ? "ime" : "base";
+        boolean dialog = (type >= 2 && type < 100 && type != TYPE_APPLICATION_STARTING)
+                || (type >= 1000 && type < 2000);
+        return dialog ? "dialog" : null;
+    }
+
+    private static String labels(Config.Bind[] binds) {
+        StringBuilder s = new StringBuilder();
+        for (int i = 1; i <= 4; i++)
+            s.append(binds[i] == null ? "-" : binds[i].label).append('/');
+        return s.toString();
     }
 
     private static void wrapCallback(Object service) {
