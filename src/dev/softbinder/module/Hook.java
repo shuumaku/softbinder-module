@@ -12,14 +12,6 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
-/**
- * system_server hook for the Kyocera KCfp softkey bar. Binds apply only to an
- * app's base window, and only to slots the app
- * left unclaimed (text "@SK_AUTO*"). F1 doubles as the system Menu, so it is
- * skipped while the window has a menu.
- * Every hook body fails open: an error is logged and the stock behaviour
- * continues.
- */
 public class Hook implements IXposedHookLoadPackage {
     private static final String SVC = "jp.kyocera.kcfp.internal.softkey.KCfpSoftkeyService";
     private static final String CALLBACK = SVC + "$Callback";
@@ -46,7 +38,7 @@ public class Hook implements IXposedHookLoadPackage {
                     try {
                         onDisplay(m);
                     } catch (Throwable t) {
-                        Journal.e("display: " + t);
+                        Logger.e("display: " + t);
                     }
                 }
             });
@@ -57,13 +49,13 @@ public class Hook implements IXposedHookLoadPackage {
                             try {
                                 onKey(m);
                             } catch (Throwable t) {
-                                Journal.e("key: " + t);
+                                Logger.e("key: " + t);
                             }
                         }
                     });
-            Journal.d("hooks installed");
+            Logger.d("hooks installed");
         } catch (Throwable t) {
-            Journal.e("install failed: " + t);
+            Logger.e("install failed: " + t);
         }
     }
 
@@ -85,8 +77,8 @@ public class Hook implements IXposedHookLoadPackage {
         String window = windowContext(type, shown != focus);
         Config.Bind[] binds = window == null ? null : Config.resolve(pkg, window, title);
         target = binds;
-        if (Journal.debug) {
-            Journal.d("focus " + pkg + " " + title + " type=" + type + " window=" + window + " bound=" + (binds != null)
+        if (Logger.debug) {
+            Logger.d("focus " + pkg + " " + title + " type=" + type + " window=" + window + " bound=" + (binds != null)
                     + " " + dump(softkeys));
         }
 
@@ -138,7 +130,7 @@ public class Hook implements IXposedHookLoadPackage {
                                     try {
                                         args = new Object[] { labelled(args[0], binds), args[1] };
                                     } catch (Throwable t) {
-                                        Journal.e("labels: " + t);
+                                        Logger.e("labels: " + t);
                                     }
                                 }
                                 try {
@@ -148,7 +140,7 @@ public class Hook implements IXposedHookLoadPackage {
                                 }
                             }
                         }));
-        Journal.d("callback wrapped");
+        Logger.d("callback wrapped");
     }
 
     /**
@@ -164,8 +156,8 @@ public class Hook implements IXposedHookLoadPackage {
             if (binds[slot] != null && free(copy, slot))
                 XposedHelpers.callMethod(copy, "setText", slot, (CharSequence) binds[slot].label);
         }
-        if (Journal.debug)
-            Journal.d("labelled " + dump(copy) + " menu=" + XposedHelpers.callMethod(copy, "hasMenu"));
+        if (Logger.debug)
+            Logger.d("labelled " + dump(copy) + " menu=" + XposedHelpers.callMethod(copy, "hasMenu"));
         return copy;
     }
 

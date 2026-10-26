@@ -25,12 +25,13 @@ import de.robv.android.xposed.XposedHelpers;
  * intent <action> [<data uri>]
  * broadcast <action> [<package>]
  * swipe up | down | left | right
+ * tap <x> <y>   (screen pixels, as in a screenshot)
  * key KEYCODE_NAME | number
  * Everything runs on one worker thread so the key path never blocks.
  */
 final class Actions {
     private static final Set<String> TYPES = new HashSet<String>(
-            Arrays.asList("launch", "intent", "broadcast", "swipe", "key"));
+            Arrays.asList("launch", "intent", "broadcast", "swipe", "tap", "key"));
     private static Handler worker;
 
     private Actions() {
@@ -46,9 +47,9 @@ final class Actions {
             public void run() {
                 try {
                     exec(ctx, b);
-                    Journal.d("ran " + b.action + " " + b.param);
+                    Logger.d("ran " + b.action + " " + b.param);
                 } catch (Throwable t) {
-                    Journal.e(b.action + " " + b.param + ": " + t);
+                    Logger.e(b.action + " " + b.param + ": " + t);
                 }
             }
         });
@@ -89,6 +90,8 @@ final class Actions {
             XposedHelpers.callMethod(ctx, "sendBroadcastAsUser", i, user);
         } else if (b.action.equals("swipe")) {
             swipe(ctx, b.param);
+        } else if (b.action.equals("tap")) {
+            tap(p);
         } else {
             key(b.param);
         }
@@ -143,6 +146,20 @@ final class Actions {
             e.setSource(InputDevice.SOURCE_TOUCHSCREEN);
             inject(e);
             Thread.sleep(30);
+        }
+    }
+
+    /** Emulate a short touch at pixel (x, y). */
+    private static void tap(String[] p) throws InterruptedException {
+        if (p.length != 2 || !p[0].matches("\\d+") || !p[1].matches("\\d+"))
+            throw new IllegalArgumentException("tap needs x y");
+        float x = Integer.parseInt(p[0]), y = Integer.parseInt(p[1]);
+        long down = SystemClock.uptimeMillis();
+        for (int action : new int[] { MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP }) {
+            MotionEvent e = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0);
+            e.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+            inject(e);
+            Thread.sleep(50);
         }
     }
 

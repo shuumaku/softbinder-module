@@ -93,22 +93,22 @@ final class Config {
         if (now == seen)
             return;
         seen = now;
-        Journal.debug = false;
+        Logger.debug = false;
         Map<String, List<Bind>> parsed = new HashMap<String, List<Bind>>();
         if (file.exists()) {
             try {
                 parse(read(file), parsed);
             } catch (Throwable t) {
-                Journal.e("config: " + t);
+                Logger.e("config: " + t);
             }
         }
         binds = parsed;
-        Journal.d("config loaded: " + parsed.keySet());
+        Logger.d("config loaded: " + parsed.keySet());
     }
 
     private static void parse(String text, Map<String, List<Bind>> out) throws Exception {
         JSONObject root = new JSONObject(text);
-        Journal.debug = root.optBoolean("debug");
+        Logger.debug = root.optBoolean("debug");
         JSONArray list = root.optJSONArray("binds");
         if (list == null)
             list = new JSONArray();
@@ -118,7 +118,7 @@ final class Config {
             int slot = o == null ? -1 : slot(o.optString("key"));
             String window = o == null ? "" : o.optString("window", "base");
             if (app.isEmpty() || slot < 1 || !Actions.valid(o.optString("action")) || !WINDOWS.contains(window)) {
-                Journal.e("config: skipped entry " + i);
+                Logger.e("config: skipped entry " + i);
                 continue;
             }
             List<Bind> forApp = out.get(app);

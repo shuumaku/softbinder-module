@@ -22,7 +22,7 @@ Example of the configuration file:
 }
 ```
 
-Actions: `launch`, `intent`, `broadcast`, `swipe`, `key`. `"debug": true` logs to `/data/system/softbinder.log`.
+Actions: `launch`, `intent`, `broadcast`, `swipe`, `tap`, `key`. A `tap` param is `x y` in screen pixels, e.g. `"param": "540 1200"`. `"debug": true` logs to `/data/system/softbinder.log`.
 
 A bind can be limited with `"window"` (`base` by default, `dialog`, `ime` for keyboard showing, or `any`) and `"activity"` (the end of the window's activity name). When several binds fit a key, the most specific one wins, so one key can change with the window.
 

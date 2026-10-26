@@ -10,13 +10,13 @@ import java.util.Locale;
  * File logger; the main logcat buffer is far too small to keep system_server
  * output.
  */
-final class Journal {
+final class Logger {
     static final String FILE = "/data/system/softbinder.log";
     private static final long MAX_BYTES = 128 * 1024;
 
     static volatile boolean debug;
 
-    private Journal() {
+    private Logger() {
     }
 
     static void e(String msg) {
